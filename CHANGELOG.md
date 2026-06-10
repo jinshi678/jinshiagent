@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.5.2] - 2026-06-10
+
+### Added
+
+#### 创作模板增强 (`creation/templates.py`)
+- `TemplateType` 新增 `VOICE_OVER`（口播脚本）、`STORYBOARD`（分镜脚本）、`HOOK`（爆款钩子文案）
+- 抖音新增 3 套模板：口播脚本、分镜脚本、爆款钩子文案
+- 小红书新增 3 套模板：口播脚本（视频笔记）、分镜脚本（视频笔记）、爆款开头钩子
+- 每套新模板含：结构说明、示例输出、创作技巧、可替换变量
+
+#### 生成引擎增强 (`creation/generator.py`)
+- `PromptBuilder.build_single_prompt()` 支持 `VOICE_OVER`/`STORYBOARD`/`HOOK` 类型约束
+- 口播脚本：100-300 字（30-60 秒），每句不超过 15 字
+- 分镜脚本：5-8 个镜头，含景别/运镜方式/时长/BGM
+- 钩子文案：5-20 字，前 3 秒说完，制造悬念或冲突
+
+#### CLI 创作指令增强 (`main.py`)
+- 新增 3 条快捷指令：`/口播`（别名 `/旁白`）、`/分镜`（别名 `/镜头`）、`/钩子`（别名 `/开头`）
+- `parse_creation_command()` 的 `cmd_map` 新增别名映射
+- `handle_creation_command()` 的 `type_map` 新增模板类型映射
+
+#### FastAPI 创作接口增强 (`server.py`)
+- `CreationSingleRequest.template_type` 描述更新，支持 `voice_over`/`storyboard`/`hook`
+- `creation_single()` 的 `type_map` 新增 `TemplateType.VOICE_OVER`/`STORYBOARD`/`HOOK`
+- API 文档字符串更新
+
+#### 文档
+- 更新 `docs/creation-guide.md`：
+  - 「单项生成」示例新增口播/分镜/钩子
+  - 「完整指令列表」表格新增 3 条指令
+  - API 调用示例新增 `voice_over`/`storyboard`/`hook` 类型
+  - 新增「新增模板类型说明」章节（口播 vs 脚本、分镜说明、钩子说明）
+  - 新增「v0.5.2 更新亮点」摘要
+
+### Changed
+
+- 版本号 `0.5.1` → `0.5.2`
+- `creation/prompts.py`：`CREATION_SYSTEM_PROMPT` 新增口播/分镜/钩子能力描述
+- `creation/prompts.py`：`CREATION_COMMANDS` 新增 `voice_over`/`storyboard`/`hook` 三条指令
+
+### Fixed
+
+- （无）
+
+---
+
 ## [v0.5.1] - 2026-06-10
 
 ### Added

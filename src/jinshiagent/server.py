@@ -692,7 +692,7 @@ class CreationSingleRequest(BaseModel):
 
     topic: str = Field(..., min_length=1, description="创作主题")
     platform: str = Field(..., description="目标平台")
-    template_type: str = Field(..., description="生成类型: title/script/copywriting/tags/cover")
+    template_type: str = Field(..., description="生成类型: title/script/voice_over/storyboard/hook/copywriting/tags/cover")
     extra_requirements: str = Field("", description="额外要求")
 
 
@@ -782,7 +782,7 @@ async def creation_single(
 ):
     """单项生成（仅标题/仅脚本/仅标签等）。
 
-    template_type 可选值: title, script, copywriting, tags, cover
+    template_type 可选值: title, script, voice_over, storyboard, hook, copywriting, tags, cover
     """
     _verify_api_key(authorization)
 
@@ -795,6 +795,9 @@ async def creation_single(
     type_map = {
         "title": TemplateType.TITLE,
         "script": TemplateType.SCRIPT,
+        "voice_over": TemplateType.VOICE_OVER,
+        "storyboard": TemplateType.STORYBOARD,
+        "hook": TemplateType.HOOK,
         "copywriting": TemplateType.COPYWRITING,
         "tags": TemplateType.TAGS,
         "cover": TemplateType.COVER,

@@ -43,7 +43,10 @@ def parse_creation_command(user_input: str) -> dict[str, Any] | None:
         /创作 <平台> <主题>   → 一键生成全套素材
         /选题 <平台> <领域>   → 批量选题
         /标题 <平台> <主题>   → 仅生成标题
-        /脚本 <平台> <主题>   → 仅生成脚本
+        /脚本 <平台> <主题>   → 仅生成脚本（画面+台词）
+        /口播 <平台> <主题>   → 仅生成口播脚本（纯旁白）
+        /分镜 <平台> <主题>   → 仅生成分镜脚本（含镜头设计）
+        /钩子 <平台> <主题>   → 仅生成爆款开头钩子
         /文案 <平台> <主题>   → 仅生成文案
         /标签 <平台> <主题>   → 仅生成标签
         /封面 <平台> <主题>   → 仅生成封面文案
@@ -69,6 +72,9 @@ def parse_creation_command(user_input: str) -> dict[str, Any] | None:
         "文案": "copywriting",
         "标签": "tags",
         "封面": "cover",
+        "口播": "voice_over", "旁白": "voice_over",
+        "分镜": "storyboard", "镜头": "storyboard",
+        "钩子": "hook", "开头": "hook",
         "多平台": "multi_platform", "全平台": "multi_platform",
         "平台列表": "platforms", "平台": "platforms",
     }
@@ -203,6 +209,9 @@ def handle_creation_command(parsed: dict[str, Any], llm_client: Any = None) -> s
             "copywriting": TemplateType.COPYWRITING,
             "tags": TemplateType.TAGS,
             "cover": TemplateType.COVER,
+            "voice_over": TemplateType.VOICE_OVER,
+            "storyboard": TemplateType.STORYBOARD,
+            "hook": TemplateType.HOOK,
         }
         template_type = type_map.get(command, TemplateType.TITLE)
         result = gen.generate_single(

@@ -182,9 +182,12 @@ class PromptBuilder:
         type_names = {
             TemplateType.TITLE: "标题",
             TemplateType.SCRIPT: "脚本/文案",
+            TemplateType.VOICE_OVER: "口播脚本",
+            TemplateType.STORYBOARD: "分镜脚本",
             TemplateType.COPYWRITING: "文案",
             TemplateType.TAGS: "标签",
             TemplateType.COVER: "封面文案",
+            TemplateType.HOOK: "爆款钩子文案",
             TemplateType.TOPIC: "选题",
         }
         type_name = type_names.get(template_type, template_type.value)
@@ -199,6 +202,12 @@ class PromptBuilder:
             prompt += f"\n标题最长 {platform_config.title_max_length} 字\n"
         elif template_type in (TemplateType.SCRIPT, TemplateType.COPYWRITING):
             prompt += f"\n正文最长 {platform_config.body_max_length} 字\n"
+        elif template_type == TemplateType.VOICE_OVER:
+            prompt += f"\n口播脚本建议 100-300 字（对应 30-60 秒视频），每句不超过 15 字\n"
+        elif template_type == TemplateType.STORYBOARD:
+            prompt += f"\n分镜建议 5-8 个镜头，总时长 15-60 秒，每个镜头标注景别和运镜方式\n"
+        elif template_type == TemplateType.HOOK:
+            prompt += f"\n钩子文案 5-20 字，必须在前 3 秒说完，制造悬念或冲突\n"
         elif template_type == TemplateType.TAGS:
             prompt += f"\n标签最多 {platform_config.tags_max_count} 个\n"
 

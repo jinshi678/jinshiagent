@@ -21,6 +21,7 @@ from jinshiagent.creation.prompts import (
     CREATION_COMMANDS,
     get_command_prompt,
 )
+from jinshiagent.main import parse_creation_command
 
 
 class TestTemplates:
@@ -206,7 +207,8 @@ class TestPrompts:
     def test_commands_completeness(self):
         """所有指令应有完整定义。"""
         expected = {"bundle", "topics", "title", "script", "copywriting",
-                    "tags", "cover", "multi_platform", "platforms"}
+                    "tags", "cover", "multi_platform", "platforms",
+                    "voice_over", "storyboard", "hook"}
         assert set(CREATION_COMMANDS.keys()) == expected
 
     def test_command_aliases(self):
@@ -268,3 +270,156 @@ class TestGeneratorJsonParsing:
         text = "这段文字没有 JSON"
         result = ContentGenerator._extract_json(text)
         assert result is None
+
+
+class TestNewTemplateTypes:
+    """新增模板类型测试（v0.5.2）"""
+
+    def test_new_template_types_exist(self):
+        """VOICE_OVER, STORYBOARD, HOOK 应在 TemplateType 中。"""
+        assert hasattr(TemplateType, "VOICE_OVER")
+        assert hasattr(TemplateType, "STORYBOARD")
+        assert hasattr(TemplateType, "HOOK")
+        assert TemplateType.VOICE_OVER.value == "voice_over"
+        assert TemplateType.STORYBOARD.value == "storyboard"
+        assert TemplateType.HOOK.value == "hook"
+
+    def test_douyin_has_voice_over(self):
+        """抖音应有口播脚本模板。"""
+        config = get_platform_config("douyin")
+        templates = config.get_templates(TemplateType.VOICE_OVER)
+        assert len(templates) > 0
+        assert "口播" in templates[0].name
+
+    def test_douyin_has_storyboard(self):
+        """抖音应有分镜脚本模板。"""
+        config = get_platform_config("douyin")
+        templates = config.get_templates(TemplateType.STORYBOARD)
+        assert len(templates) > 0
+        assert "分镜" in templates[0].name
+
+    def test_douyin_has_hook(self):
+        """抖音应有爆款钩子模板。"""
+        config = get_platform_config("douyin")
+        templates = config.get_templates(TemplateType.HOOK)
+        assert len(templates) > 0
+        assert "钩子" in templates[0].name
+
+    def test_xiaohongshu_has_voice_over(self):
+        """小红书应有口播脚本模板。"""
+        config = get_platform_config("xiaohongshu")
+        templates = config.get_templates(TemplateType.VOICE_OVER)
+        assert len(templates) > 0
+        assert "口播" in templates[0].name
+
+    def test_xiaohongshu_has_storyboard(self):
+        """小红书应有分镜脚本模板。"""
+        config = get_platform_config("xiaohongshu")
+        templates = config.get_templates(TemplateType.STORYBOARD)
+        assert len(templates) > 0
+        assert "分镜" in templates[0].name
+
+    def test_xiaohongshu_has_hook(self):
+        """小红书应有爆款钩子模板。"""
+        config = get_platform_config("xiaohongshu")
+        templates = config.get_templates(TemplateType.HOOK)
+        assert len(templates) > 0
+        assert "钩子" in templates[0].name
+
+
+class TestNewCommands:
+    """新增指令测试（v0.5.2）"""
+
+    def test_new_commands_in_creation_commands(self):
+        """voice_over, storyboard, hook 应在 CREATION_COMMANDS 中。"""
+        assert "voice_over" in CREATION_COMMANDS
+        assert "storyboard" in CREATION_COMMANDS
+        assert "hook" in CREATION_COMMANDS
+
+    def test_voice_over_command(self):
+        """口播指令应有正确属性。"""
+        cmd = CREATION_COMMANDS["voice_over"]
+        assert "口播" in cmd.aliases
+        assert "旁白" in cmd.aliases
+        assert cmd.description
+        assert cmd.prompt_template
+
+    def test_storyboard_command(self):
+        """分镜指令应有正确属性。"""
+        cmd = CREATION_COMMANDS["storyboard"]
+        assert "分镜" in cmd.aliases
+        assert "镜头" in cmd.aliases
+        assert cmd.description
+        assert cmd.prompt_template
+
+    def test_hook_command(self):
+        """钩子指令应有正确属性。"""
+        cmd = CREATION_COMMANDS["hook"]
+        assert "钩子" in cmd.aliases
+        assert "开头" in cmd.aliases
+        assert cmd.description
+        assert cmd.prompt_template
+
+    def test_get_command_prompt_voice_over(self):
+        """获取口播指令 prompt。"""
+        prompt = get_command_prompt("voice_over", platform="douyin", topic="AI绘画")
+        assert prompt
+        assert "口播" in prompt or "douyin" in prompt
+
+    def test_get_command_prompt_storyboard(self):
+        """获取分镜指令 prompt。"""
+        prompt = get_command_prompt("storyboard", platform="xiaohongshu", topic="护肤")
+        assert prompt
+        assert "分镜" in prompt or "xiaohongshu" in prompt
+
+    def test_get_command_prompt_hook(self):
+        """获取钩子指令 prompt。"""
+        prompt = get_command_prompt("hook", platform="douyin", topic="健身")
+        assert prompt
+        assert "钩子" in prompt or "douyin" in prompt
+
+
+class TestParseCreationCommandNew:
+    """测试 parse_creation_command 新指令（v0.5.2）"""
+
+    def test_parse_voice_over(self):
+        """解析 /口播 指令。"""
+        result = parse_creation_command("/口播 douyin AI绘画")
+        assert result is not None
+        assert result["command"] == "voice_over"
+        assert result["platform"] == "douyin"
+        assert result["topic"] == "AI绘画"
+
+    def test_parse_voice_over_alias(self):
+        """通过别名 /旁白 解析。"""
+        result = parse_creation_command("/旁白 xiaohongshu 护肤")
+        assert result is not None
+        assert result["command"] == "voice_over"
+
+    def test_parse_storyboard(self):
+        """解析 /分镜 指令。"""
+        result = parse_creation_command("/分镜 douyin 新品开箱")
+        assert result is not None
+        assert result["command"] == "storyboard"
+        assert result["platform"] == "douyin"
+        assert result["topic"] == "新品开箱"
+
+    def test_parse_storyboard_alias(self):
+        """通过别名 /镜头 解析。"""
+        result = parse_creation_command("/镜头 xiaohongshu 穿搭")
+        assert result is not None
+        assert result["command"] == "storyboard"
+
+    def test_parse_hook(self):
+        """解析 /钩子 指令。"""
+        result = parse_creation_command("/钩子 douyin 健身")
+        assert result is not None
+        assert result["command"] == "hook"
+        assert result["platform"] == "douyin"
+        assert result["topic"] == "健身"
+
+    def test_parse_hook_alias(self):
+        """通过别名 /开头 解析。"""
+        result = parse_creation_command("/开头 douyin 减肥")
+        assert result is not None
+        assert result["command"] == "hook"
