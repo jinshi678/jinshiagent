@@ -1,14 +1,15 @@
 """JinshiAgent 项目入口 — 交互式 Agent CLI
 
 用法:
-    python -m jinshiagent            # 交互模式
+    python -m jinshiagent            # 交互模式（同步）
+    python -m jinshiagent --async    # 交互模式（异步）
     python -m jinshiagent --verbose  # 详细日志
     python -m jinshiagent --help     # 帮助
 
 功能:
     - 加载 .env / config.yaml 配置
     - 注册内置工具（计算器、天气查询、搜索）— 真实 API
-    - 启动交互式对话循环
+    - 支持同步/异步两种 ReAct 推理模式
     - 展示完整的 ReAct（思考→行动→观察）推理过程
 """
 
@@ -100,7 +101,6 @@ class MockLLMClient:
                 user_msg = m.get("content", "")
                 break
 
-        # 第一次调用：根据用户输入决定调用哪个工具
         if self._call_count == 1:
             if any(w in user_msg for w in ["天气", "气温", "下雨", "温度"]):
                 for city in ["北京", "上海", "武汉", "深圳", "广州", "Tokyo", "New York"]:
@@ -148,7 +148,6 @@ class MockLLMClient:
                         }
                     ],
                 }
-            # 默认：搜索
             return {
                 "role": "assistant",
                 "content": None,
@@ -163,7 +162,6 @@ class MockLLMClient:
                 ],
             }
 
-        # 第二次及以后调用：返回最终回答
         return {
             "role": "assistant",
             "content": (
@@ -172,24 +170,118 @@ class MockLLMClient:
             ),
         }
 
+    async def achat_with_tools(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        """异步版本，行为同 chat_with_tools()。"""
+        return self.chat_with_tools(messages, tools)
+
     def chat(self, message: str, **kwargs: Any) -> str:
         return "（Mock 模式，请配置 OPENAI_API_KEY 以使用真实 LLM）"
 
 
 # ————————————————————————————————————————————————————————————————
-# 主程序
+# 异步主程序
+# ————————————————————————————————————————————————————————————————
+
+
+async def async_main() -> None:
+    """异步模式主程序。"""
+    load_dotenv()
+    verbose: bool = "--verbose" in sys.argv or "-v" in sys.argv
+
+    setup_logging(level="DEBUG" if verbose else "INFO")
+    logger: logging.Logger = logging.getLogger("jinshiagent")
+
+    print("=" * 60)
+    print("  JinshiAgent v0.1.0 — AI Agent 工具框架（异步模式）")
+    print("  输入 'quit' / 'exit' / 'q' 退出")
+    print("  输入 'reset' 清空对话历史")
+    print("=" * 60)
+
+    api_key: str = os.getenv("OPENAI_API_KEY", "")
+    use_mock: bool = not api_key or api_key.startswith("sk-your")
+
+    if use_mock:
+        print("\n[提示] 未检测到有效 OPENAI_API_KEY，使用 Mock 模式。")
+        llm_client: Any = MockLLMClient()
+    else:
+        try:
+            llm_client = LLMClient(LLMConfig(api_key=api_key))
+            print(f"\n[✓] LLM 客户端已初始化（异步模式）")
+        except LLMError as e:
+            print(f"[!] LLM 初始化失败: {e}，切换为 Mock 模式")
+            llm_client = MockLLMClient()
+
+    registry: ToolRegistry = ToolRegistry()
+    register_builtin_tools(registry)
+
+    system_prompt: str = (
+        "你是一个有用的 AI 助手。可以使用工具来回答用户问题。"
+        "当需要计算、查天气或搜索信息时，请主动调用相应工具。"
+        "回答时请用中文，简洁明了。"
+    )
+    agent: Agent = Agent(
+        name="jinshiagent-cli-async",
+        description="JinshiAgent 异步交互式命令行助手",
+        system_prompt=system_prompt,
+        llm_client=llm_client,
+        tool_registry=registry,
+        max_iterations=10,
+    )
+
+    print(f"[✓] Agent 已启动（异步）| 工具: {registry.list_tools()}")
+    print()
+
+    while True:
+        try:
+            user_input: str = await asyncio.get_event_loop().run_in_executor(
+                None, input, "你: "
+            )
+            user_input = user_input.strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\n再见！")
+            break
+
+        if not user_input:
+            continue
+        if user_input.lower() in ("quit", "exit", "q", "退出"):
+            print("再见！")
+            break
+        if user_input.lower() in ("reset", "清除", "清空"):
+            agent.reset()
+            print("[✓] 对话历史已清空\n")
+            continue
+
+        try:
+            response: str = await agent.arun(user_input)
+            print(f"助手: {response}\n")
+        except AgentError as e:
+            print(f"[!] Agent 错误: {e}\n")
+        except Exception as e:
+            print(f"[!] 未知错误: {e}\n")
+            logger.exception("异步 ReAct 循环异常")
+
+
+# ————————————————————————————————————————————————————————————————
+# 同步主程序
 # ————————————————————————————————————————————————————————————————
 
 
 def main() -> None:
-    """启动 JinshiAgent 交互式 CLI。"""
+    """启动 JinshiAgent 交互式 CLI（同步模式）。"""
     load_dotenv()
 
-    # 解析命令行参数（简易版）
     verbose: bool = "--verbose" in sys.argv or "-v" in sys.argv
     use_async: bool = "--async" in sys.argv
 
-    # 初始化日志
+    # 如果指定了异步模式，委托给 async_main
+    if use_async:
+        asyncio.run(async_main())
+        return
+
     setup_logging(level="DEBUG" if verbose else "INFO")
     logger: logging.Logger = logging.getLogger("jinshiagent")
 
@@ -199,7 +291,6 @@ def main() -> None:
     print("  输入 'reset' 清空对话历史")
     print("=" * 60)
 
-    # 准备 LLM 客户端
     api_key: str = os.getenv("OPENAI_API_KEY", "")
     use_mock: bool = not api_key or api_key.startswith("sk-your")
 
@@ -216,7 +307,6 @@ def main() -> None:
             print(f"[!] LLM 初始化失败: {e}，切换为 Mock 模式")
             llm_client = MockLLMClient()
 
-    # 创建工具注册中心和 Agent
     registry: ToolRegistry = ToolRegistry()
     register_builtin_tools(registry)
 
@@ -239,7 +329,6 @@ def main() -> None:
         print("[✓] 详细日志模式已开启")
     print()
 
-    # 交互式对话循环
     while True:
         try:
             user_input: str = input("你: ").strip()
@@ -257,7 +346,6 @@ def main() -> None:
             print("[✓] 对话历史已清空\n")
             continue
 
-        # 执行 ReAct 推理
         try:
             response: str = agent.run(user_input)
             print(f"助手: {response}\n")

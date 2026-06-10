@@ -245,6 +245,29 @@ class ToolRegistry:
             "content": str(result),
         }
 
+    def async_tool(
+        self,
+        func: Callable[..., Any] | None = None,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+    ) -> Any:
+        """注册异步工具函数（装饰器语法）。
+
+        与 register() 功能相同，但语义上明确表示这是异步工具。
+        执行时 Agent 的异步 ReAct 循环会自动 await 该工具。
+
+        用法::
+
+            @registry.async_tool
+            async def fetch_url(url: str) -> str:
+                \"\"获取 URL 内容\"\"\"
+                import httpx
+                resp = await httpx.AsyncClient().get(url)
+                return resp.text[:500]
+        """
+        return self.register(func, name=name, description=description)
+
     def call(self, name: str, **kwargs: Any) -> Any:
         """调用已注册的工具。
 
