@@ -27,7 +27,11 @@
 from __future__ import annotations
 
 import inspect
+import json
+import logging
 from typing import Any, Callable
+
+logger = logging.getLogger("jinshiagent.core.tool_registry")
 
 
 class ToolDefinition:
@@ -171,6 +175,75 @@ class ToolRegistry:
             description=tool_desc,
             func=func,
         )
+
+    def execute_tool_call(self, tool_call: dict) -> dict[str, str]:
+        """解析并执行 LLM 返回的单个 tool_call，返回 tool 消息。
+
+        LLM 返回的 tool_call 格式::
+
+            {
+                "id": "call_abc123",
+                "function": {
+                    "name": "search",
+                    "arguments": "{\"query\": \"AI Agent\"}"
+                }
+            }
+
+        返回格式（直接用于 OpenAI messages）::
+
+            {
+                "tool_call_id": "call_abc123",
+                "role": "tool",
+                "name": "search",
+                "content": "搜索结果: AI Agent"
+            }
+
+        Args:
+            tool_call: LLM 响应中的单个 tool_call dict
+
+        Returns:
+            符合 OpenAI API 格式的 tool 消息 dict
+
+        Raises:
+            ToolError: 工具执行失败
+            KeyError: 工具未注册
+        """
+        func_name: str = tool_call["function"]["name"]
+
+        if func_name not in self._tools:
+            raise KeyError(
+                f"工具 '{func_name}' 未注册，"
+                f"可用工具: {list(self._tools.keys())}"
+            )
+
+        # 解析 JSON 参数（LLM 返回的是 JSON 字符串）
+        raw_args: str = tool_call["function"]["arguments"]
+        try:
+            kwargs: dict[str, Any] = json.loads(raw_args) if raw_args else {}
+        except json.JSONDecodeError as e:
+            raise ToolError(
+                f"工具 '{func_name}' 的参数 JSON 解析失败: {e}",
+                details=f"原始参数: {raw_args!r}",
+            ) from e
+
+        # 执行工具
+        logger.debug("调用工具: %s, 参数: %s", func_name, kwargs)
+        try:
+            result = self._tools[func_name].func(**kwargs)
+        except Exception as e:
+            raise ToolError(
+                f"工具 '{func_name}' 执行失败: {e}",
+                details=f"参数: {kwargs}",
+            ) from e
+
+        logger.debug("工具 %s 返回: %r", func_name, result)
+
+        return {
+            "tool_call_id": tool_call["id"],
+            "role": "tool",
+            "name": func_name,
+            "content": str(result),
+        }
 
     def call(self, name: str, **kwargs: Any) -> Any:
         """调用已注册的工具。

@@ -7,11 +7,17 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
-from typing import Any, Generator
+from typing import TYPE_CHECKING, Any, Generator
 
 from jinshiagent.utils.exceptions import LLMError
+
+if TYPE_CHECKING:
+    pass
+
+logger = logging.getLogger("jinshiagent.llm")
 
 
 @dataclass
@@ -96,12 +102,37 @@ class LLMClient:
         Raises:
             LLMError: API 调用失败
         """
-        client = self._get_client()
-
         messages: list[dict[str, str]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": message})
+
+        return self.chat_with_tools(messages, tools, **kwargs).get("content") or ""
+
+    def chat_with_tools(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """发送聊天请求并返回完整响应消息（可能包含 tool_calls）。
+
+        这是 ReAct 循环的核心方法。返回的 dict 可能包含：
+        - ``{"role": "assistant", "content": "..."}`` — 最终回答
+        - ``{"role": "assistant", "content": None, "tool_calls": [...]}`` — 需要调用工具
+
+        Args:
+            messages: OpenAI 格式的消息列表
+            tools: 可用工具的 OpenAI schema 列表
+            **kwargs: 额外传递给 API 的参数
+
+        Returns:
+            完整响应消息 dict，键包括 role、content，可能包含 tool_calls
+
+        Raises:
+            LLMError: API 调用失败
+        """
+        client = self._get_client()
 
         request_params: dict[str, Any] = {
             "model": self.config.model,
@@ -113,11 +144,22 @@ class LLMClient:
         if tools:
             request_params["tools"] = tools
 
+        logger.debug("LLM 请求: messages=%d, tools=%s", len(messages), bool(tools))
+
         try:
             response = client.chat.completions.create(**request_params)
-            return response.choices[0].message.content or ""
         except Exception as e:
             raise LLMError(f"LLM 调用失败: {e}") from e
+
+        msg: Any = response.choices[0].message
+        result: dict[str, Any] = {"role": msg.role, "content": msg.content}
+
+        # 提取 tool_calls（OpenAI SDK 返回的是 Pydantic 模型列表）
+        if hasattr(msg, "tool_calls") and msg.tool_calls:
+            result["tool_calls"] = [tc.model_dump() for tc in msg.tool_calls]
+
+        logger.debug("LLM 响应: role=%s, has_tool_calls=%s", result["role"], "tool_calls" in result)
+        return result
 
     def chat_stream(
         self,

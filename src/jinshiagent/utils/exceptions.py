@@ -51,3 +51,7 @@ class MemoryError(JinshiAgentError):
 
 class WorkflowError(JinshiAgentError):
     """工作流编排/执行错误"""
+
+
+class AgentError(JinshiAgentError):
+    """Agent 执行错误（ReAct 循环异常、未配置 LLM 等）"""
