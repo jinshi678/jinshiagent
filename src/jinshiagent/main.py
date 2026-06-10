@@ -32,6 +32,188 @@ from jinshiagent.utils.logging import setup_logging
 
 
 # ————————————————————————————————————————————————————————————————
+# 创作指令解析器 — 识别 /创作 /选题 等快捷指令
+# ————————————————————————————————————————————————————————————————
+
+
+def parse_creation_command(user_input: str) -> dict[str, Any] | None:
+    """解析创作类快捷指令。
+
+    支持的指令格式:
+        /创作 <平台> <主题>   → 一键生成全套素材
+        /选题 <平台> <领域>   → 批量选题
+        /标题 <平台> <主题>   → 仅生成标题
+        /脚本 <平台> <主题>   → 仅生成脚本
+        /文案 <平台> <主题>   → 仅生成文案
+        /标签 <平台> <主题>   → 仅生成标签
+        /封面 <平台> <主题>   → 仅生成封面文案
+        /多平台 <主题>        → 同一主题适配多平台
+        /平台列表             → 查看支持的平台
+
+    Returns:
+        解析后的指令 dict，或 None（非创作指令）
+    """
+    text = user_input.strip()
+    if not text.startswith("/"):
+        return None
+
+    parts = text.split(maxsplit=2)
+    cmd = parts[0].lstrip("/")
+
+    # 指令别名映射
+    cmd_map = {
+        "创作": "bundle", "全套": "bundle", "一键": "bundle",
+        "选题": "topics", "策划": "topics", "批量": "topics",
+        "标题": "title",
+        "脚本": "script",
+        "文案": "copywriting",
+        "标签": "tags",
+        "封面": "cover",
+        "多平台": "multi_platform", "全平台": "multi_platform",
+        "平台列表": "platforms", "平台": "platforms",
+    }
+
+    command = cmd_map.get(cmd)
+    if not command:
+        return None
+
+    result: dict[str, Any] = {"command": command}
+
+    if command == "platforms":
+        return result
+
+    if command == "multi_platform":
+        # /多平台 <主题>
+        result["topic"] = parts[1] if len(parts) > 1 else ""
+        return result
+
+    # 其他指令需要平台参数
+    if len(parts) < 3 and command not in ("platforms",):
+        # 尝试只有2个部分的情况
+        if len(parts) == 2:
+            # 可能是 /指令 主题（省略平台，用默认）
+            result["platform"] = "douyin"  # 默认抖音
+            result["topic"] = parts[1]
+        else:
+            result["platform"] = "douyin"
+            result["topic"] = ""
+        return result
+
+    result["platform"] = parts[1]
+    result["topic"] = parts[2] if len(parts) > 2 else ""
+    return result
+
+
+def handle_creation_command(parsed: dict[str, Any], llm_client: Any = None) -> str:
+    """处理解析后的创作指令，返回输出文本。"""
+    from jinshiagent.creation.generator import ContentGenerator
+    from jinshiagent.creation.templates import TemplateType, list_platforms, get_platform_config
+
+    command = parsed["command"]
+
+    if command == "platforms":
+        platforms = list_platforms()
+        lines = ["📋 支持的自媒体平台：", ""]
+        for p in platforms:
+            lines.append(f"  {p['icon']} {p['name']}（{p['id']}）— {p['description']}")
+        lines.append("")
+        lines.append("使用方法：/创作 <平台> <主题>")
+        lines.append("例如：/创作 douyin AI绘画入门")
+        return "\n".join(lines)
+
+    gen = ContentGenerator(llm_client=llm_client)
+
+    if command == "bundle":
+        platform = parsed.get("platform", "douyin")
+        topic = parsed.get("topic", "")
+        if not topic:
+            return "请提供创作主题！用法：/创作 <平台> <主题>"
+
+        result = gen.generate_bundle(topic=topic, platform=platform)
+        lines = [
+            f"🎨 {result.platform_name} 创作素材 | 主题：{result.topic}",
+            "",
+            f"📝 标题：{result.title}",
+            "",
+            f"📄 脚本/文案：",
+            result.script,
+            "",
+            f"🏷️ 标签：{', '.join(result.tags) if result.tags else '（待生成）'}",
+            "",
+            f"🖼️ 封面文案：{result.cover}",
+        ]
+        if result.tips:
+            lines.append("")
+            lines.append("💡 创作建议：")
+            for t in result.tips:
+                lines.append(f"  - {t}")
+        return "\n".join(lines)
+
+    elif command == "topics":
+        platform = parsed.get("platform", "douyin")
+        niche = parsed.get("topic", "")
+        if not niche:
+            return "请提供创作领域！用法：/选题 <平台> <领域>"
+
+        result = gen.generate_topics(niche=niche, platform=platform)
+        lines = [
+            f"🎯 {niche} 领域选题 | 平台：{result.platform}",
+            "",
+        ]
+        for i, t in enumerate(result.topics, 1):
+            lines.append(f"  {i}. {t.get('title', '')}")
+            if t.get("direction"):
+                lines.append(f"     方向：{t['direction']}")
+            if t.get("expected_effect"):
+                lines.append(f"     预期：{t['expected_effect']}")
+            lines.append("")
+        if result.tags_pool:
+            lines.append(f"🏷️ 推荐标签池：{', '.join(result.tags_pool)}")
+        if result.tips:
+            lines.append("")
+            lines.append("💡 策略建议：")
+            for t in result.tips:
+                lines.append(f"  - {t}")
+        return "\n".join(lines)
+
+    elif command == "multi_platform":
+        topic = parsed.get("topic", "")
+        if not topic:
+            return "请提供创作主题！用法：/多平台 <主题>"
+
+        results = gen.generate_multi_platform(topic=topic)
+        lines = [f"🌐 多平台适配 | 主题：{topic}", ""]
+        for r in results:
+            lines.append(f"  {r.platform_name}：{r.title}")
+            if r.tips:
+                lines.append(f"    💡 {'; '.join(r.tips[:2])}")
+            lines.append("")
+        return "\n".join(lines)
+
+    else:
+        # 单项生成
+        platform = parsed.get("platform", "douyin")
+        topic = parsed.get("topic", "")
+        if not topic:
+            return f"请提供创作主题！用法：/{command} <平台> <主题>"
+
+        type_map = {
+            "title": TemplateType.TITLE,
+            "script": TemplateType.SCRIPT,
+            "copywriting": TemplateType.COPYWRITING,
+            "tags": TemplateType.TAGS,
+            "cover": TemplateType.COVER,
+        }
+        template_type = type_map.get(command, TemplateType.TITLE)
+        result = gen.generate_single(
+            topic=topic,
+            platform=platform,
+            template_type=template_type,
+        )
+        return result
+
+
+# ————————————————————————————————————————————————————————————————
 # 内置工具注册 — 真实 API 版本
 # ————————————————————————————————————————————————————————————————
 
@@ -196,9 +378,11 @@ async def async_main() -> None:
     logger: logging.Logger = logging.getLogger("jinshiagent")
 
     print("=" * 60)
-    print("  JinshiAgent v0.1.0 — AI Agent 工具框架（异步模式）")
+    print("  JinshiAgent v0.5.0 — AI Agent 工具框架（异步模式）")
     print("  输入 'quit' / 'exit' / 'q' 退出")
     print("  输入 'reset' 清空对话历史")
+    print("  输入 '/创作 douyin AI绘画' 一键生成创作素材")
+    print("  输入 '/平台列表' 查看支持的自媒体平台")
     print("=" * 60)
 
     api_key: str = os.getenv("OPENAI_API_KEY", "")
@@ -221,7 +405,9 @@ async def async_main() -> None:
     system_prompt: str = (
         "你是一个有用的 AI 助手。可以使用工具来回答用户问题。"
         "当需要计算、查天气或搜索信息时，请主动调用相应工具。"
-        "回答时请用中文，简洁明了。"
+        "回答时请用中文，简洁明了。\n\n"
+        "你也擅长内容创作，可以为各大自媒体平台创作内容。"
+        "用户可以使用 /创作、/选题、/标题 等快捷指令触发创作功能。"
     )
     agent: Agent = Agent(
         name="jinshiagent-cli-async",
@@ -255,6 +441,16 @@ async def async_main() -> None:
             print("[✓] 对话历史已清空\n")
             continue
 
+        # 检测创作快捷指令
+        creation_cmd = parse_creation_command(user_input)
+        if creation_cmd:
+            try:
+                output = handle_creation_command(creation_cmd, llm_client=llm_client)
+                print(f"助手: {output}\n")
+            except Exception as e:
+                print(f"[!] 创作指令执行失败: {e}\n")
+            continue
+
         try:
             response: str = await agent.arun(user_input)
             print(f"助手: {response}\n")
@@ -286,9 +482,11 @@ def main() -> None:
     logger: logging.Logger = logging.getLogger("jinshiagent")
 
     print("=" * 60)
-    print("  JinshiAgent v0.1.0 — AI Agent 工具框架")
+    print("  JinshiAgent v0.5.0 — AI Agent 工具框架")
     print("  输入 'quit' / 'exit' / 'q' 退出")
     print("  输入 'reset' 清空对话历史")
+    print("  输入 '/创作 douyin AI绘画' 一键生成创作素材")
+    print("  输入 '/平台列表' 查看支持的自媒体平台")
     print("=" * 60)
 
     api_key: str = os.getenv("OPENAI_API_KEY", "")
@@ -313,7 +511,9 @@ def main() -> None:
     system_prompt: str = (
         "你是一个有用的 AI 助手。可以使用工具来回答用户问题。"
         "当需要计算、查天气或搜索信息时，请主动调用相应工具。"
-        "回答时请用中文，简洁明了。"
+        "回答时请用中文，简洁明了。\n\n"
+        "你也擅长内容创作，可以为各大自媒体平台创作内容。"
+        "用户可以使用 /创作、/选题、/标题 等快捷指令触发创作功能。"
     )
     agent: Agent = Agent(
         name="jinshiagent-cli",
@@ -344,6 +544,16 @@ def main() -> None:
         if user_input.lower() in ("reset", "清除", "清空"):
             agent.reset()
             print("[✓] 对话历史已清空\n")
+            continue
+
+        # 检测创作快捷指令
+        creation_cmd = parse_creation_command(user_input)
+        if creation_cmd:
+            try:
+                output = handle_creation_command(creation_cmd, llm_client=llm_client)
+                print(f"助手: {output}\n")
+            except Exception as e:
+                print(f"[!] 创作指令执行失败: {e}\n")
             continue
 
         try:

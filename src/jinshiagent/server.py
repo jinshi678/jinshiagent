@@ -259,7 +259,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="JinshiAgent API",
     description="AI Agent 工具框架 — HTTP API 接口",
-    version="0.5.0",
+    version="0.5.1",
     lifespan=lifespan,
 )
 
@@ -664,6 +664,191 @@ async def list_multi_agent_modes(authorization: str | None = Header(None)):
             },
         ]
     }
+
+
+# ---------------------------------------------------------------------------
+# 内容创作接口
+# ---------------------------------------------------------------------------
+
+
+class CreationBundleRequest(BaseModel):
+    """一键生成全套创作素材请求。"""
+
+    topic: str = Field(..., min_length=1, description="创作主题")
+    platform: str = Field(..., description="目标平台: xiaohongshu/douyin/kuaishou/bilibili/zhihu/toutiao/weibo/wechat")
+    extra_requirements: str = Field("", description="额外要求")
+
+
+class CreationTopicRequest(BaseModel):
+    """批量选题请求。"""
+
+    niche: str = Field(..., min_length=1, description="创作领域/赛道")
+    platform: str = Field(..., description="目标平台")
+    count: int = Field(5, ge=1, le=20, description="选题数量")
+
+
+class CreationSingleRequest(BaseModel):
+    """单项生成请求。"""
+
+    topic: str = Field(..., min_length=1, description="创作主题")
+    platform: str = Field(..., description="目标平台")
+    template_type: str = Field(..., description="生成类型: title/script/copywriting/tags/cover")
+    extra_requirements: str = Field("", description="额外要求")
+
+
+class CreationMultiPlatformRequest(BaseModel):
+    """多平台适配请求。"""
+
+    topic: str = Field(..., min_length=1, description="创作主题")
+    platforms: list[str] | None = Field(None, description="目标平台列表（默认全部）")
+    extra_requirements: str = Field("", description="额外要求")
+
+
+@app.get("/creation/platforms", tags=["创作"])
+async def creation_list_platforms(authorization: str | None = Header(None)):
+    """列出所有支持的自媒体平台。"""
+    _verify_api_key(authorization)
+
+    from jinshiagent.creation.templates import list_platforms
+    return {"platforms": list_platforms()}
+
+
+@app.post("/creation/bundle", tags=["创作"])
+async def creation_bundle(
+    req: CreationBundleRequest,
+    authorization: str | None = Header(None),
+):
+    """一键生成全套创作素材（标题+脚本/文案+标签+封面）。
+
+    根据目标平台的风格规范，一次性生成完整的短视频/图文创作素材。
+    """
+    _verify_api_key(authorization)
+
+    if not _llm_client:
+        raise HTTPException(status_code=503, detail="LLM 服务未配置，请设置 OPENAI_API_KEY")
+
+    from jinshiagent.creation.generator import ContentGenerator
+
+    gen = ContentGenerator(llm_client=_llm_client)
+    try:
+        result = gen.generate_bundle(
+            topic=req.topic,
+            platform=req.platform,
+            extra_requirements=req.extra_requirements,
+        )
+        return result.model_dump()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        logger.error("创作生成失败: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"生成失败: {e}") from e
+
+
+@app.post("/creation/topics", tags=["创作"])
+async def creation_topics(
+    req: CreationTopicRequest,
+    authorization: str | None = Header(None),
+):
+    """批量产出选题方向。
+
+    根据创作赛道和目标平台，生成多个差异化的选题方向。
+    """
+    _verify_api_key(authorization)
+
+    if not _llm_client:
+        raise HTTPException(status_code=503, detail="LLM 服务未配置")
+
+    from jinshiagent.creation.generator import ContentGenerator
+
+    gen = ContentGenerator(llm_client=_llm_client)
+    try:
+        result = gen.generate_topics(
+            niche=req.niche,
+            platform=req.platform,
+            count=req.count,
+        )
+        return result.model_dump()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        logger.error("选题生成失败: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"生成失败: {e}") from e
+
+
+@app.post("/creation/single", tags=["创作"])
+async def creation_single(
+    req: CreationSingleRequest,
+    authorization: str | None = Header(None),
+):
+    """单项生成（仅标题/仅脚本/仅标签等）。
+
+    template_type 可选值: title, script, copywriting, tags, cover
+    """
+    _verify_api_key(authorization)
+
+    if not _llm_client:
+        raise HTTPException(status_code=503, detail="LLM 服务未配置")
+
+    from jinshiagent.creation.generator import ContentGenerator
+    from jinshiagent.creation.templates import TemplateType
+
+    type_map = {
+        "title": TemplateType.TITLE,
+        "script": TemplateType.SCRIPT,
+        "copywriting": TemplateType.COPYWRITING,
+        "tags": TemplateType.TAGS,
+        "cover": TemplateType.COVER,
+    }
+    template_type = type_map.get(req.template_type)
+    if not template_type:
+        raise HTTPException(
+            status_code=400,
+            detail=f"不支持的类型: {req.template_type}，可选: {list(type_map.keys())}",
+        )
+
+    gen = ContentGenerator(llm_client=_llm_client)
+    try:
+        result = gen.generate_single(
+            topic=req.topic,
+            platform=req.platform,
+            template_type=template_type,
+            extra_requirements=req.extra_requirements,
+        )
+        return {"content": result, "platform": req.platform, "type": req.template_type}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        logger.error("单项生成失败: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"生成失败: {e}") from e
+
+
+@app.post("/creation/multi-platform", tags=["创作"])
+async def creation_multi_platform(
+    req: CreationMultiPlatformRequest,
+    authorization: str | None = Header(None),
+):
+    """同一主题适配多平台。
+
+    同一创作主题，自动适配多个自媒体平台的内容风格。
+    """
+    _verify_api_key(authorization)
+
+    if not _llm_client:
+        raise HTTPException(status_code=503, detail="LLM 服务未配置")
+
+    from jinshiagent.creation.generator import ContentGenerator
+
+    gen = ContentGenerator(llm_client=_llm_client)
+    try:
+        results = gen.generate_multi_platform(
+            topic=req.topic,
+            platforms=req.platforms,
+            extra_requirements=req.extra_requirements,
+        )
+        return {"topic": req.topic, "bundles": [r.model_dump() for r in results]}
+    except Exception as e:
+        logger.error("多平台生成失败: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"生成失败: {e}") from e
 
 
 # ---------------------------------------------------------------------------

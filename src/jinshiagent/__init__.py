@@ -7,8 +7,10 @@
     - llm: LLM 调用客户端（OpenAI 兼容）
     - memory: 短期/长期记忆管理
     - tools: 内置工具集（天气/搜索/计算器）
+    - creation: 内容创作模块（8大自媒体平台模板+一键生成）
+    - mcp: MCP 协议支持
     - config: 多级配置加载
     - utils: 日志与异常处理
 """
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"

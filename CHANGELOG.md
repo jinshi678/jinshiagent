@@ -5,6 +5,63 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.5.1] - 2026-06-10
+
+### Added
+
+#### 内容创作模块 (`creation/`)
+- 新增 `creation/templates.py`：8 大自媒体平台专属创作模板
+  - 小红书：种草笔记、探店攻略、标题、标签、封面、选题共 6 套模板
+  - 抖音：短视频脚本、知识科普脚本、标题、标签、封面共 5 套模板
+  - 快手：生活记录脚本、标题、标签共 3 套模板
+  - B站：知识区视频脚本、标题、标签共 3 套模板
+  - 知乎：专业回答、标题共 2 套模板
+  - 今日头条：资讯图文、标题共 2 套模板
+  - 微博：热点评论、标签共 2 套模板
+  - 微信公众号：深度长文、标题、封面共 3 套模板
+  - 每套模板包含：结构说明、示例输出、创作技巧、可替换变量
+- 新增 `creation/generator.py`：内容生成引擎
+  - `generate_bundle()`：一键生成全套创作素材（标题+脚本/文案+标签+封面）
+  - `generate_topics()`：批量产出选题方向
+  - `generate_single()`：单项生成（仅标题/仅脚本/仅标签等）
+  - `generate_multi_platform()`：同一主题适配多平台
+  - 支持 LLM 自动生成和 prompt-only 模式
+  - 自动 JSON 解析与回退处理
+- 新增 `creation/prompts.py`：创作系统 prompt 与快捷指令库
+  - `CREATION_SYSTEM_PROMPT`：创作助手「金师」的系统 prompt
+  - 9 个快捷指令：`/创作` `/选题` `/标题` `/脚本` `/文案` `/标签` `/封面` `/多平台` `/平台列表`
+  - 每个指令含中文别名映射
+
+#### CLI 创作指令集成 (`main.py`)
+- 新增 `parse_creation_command()`：解析 `/创作` 等快捷指令
+- 新增 `handle_creation_command()`：处理创作指令并格式化输出
+- CLI 循环中自动检测创作指令，优先处理
+- 同步/异步两种模式均支持创作指令
+
+#### FastAPI 创作接口 (`server.py`)
+- `GET /creation/platforms`：列出支持的自媒体平台
+- `POST /creation/bundle`：一键生成全套创作素材
+- `POST /creation/topics`：批量产出选题方向
+- `POST /creation/single`：单项生成（title/script/copywriting/tags/cover）
+- `POST /creation/multi-platform`：同一主题适配多平台
+
+#### 文档
+- 新增 `docs/creation-guide.md`：内容创作完整使用教程
+  - 快速开始、完整指令列表、平台 ID 对照表
+  - API 调用方式、Python SDK 调用示例
+  - 创作工作流建议、各平台创作要点
+
+#### 测试
+- 新增 `tests/test_creation.py`：29 个创作模块单元测试（全通过）
+
+### Changed
+- 版本号 `0.5.0` → `0.5.1`
+- `main.py`：CLI 横幅更新至 v0.5.1，新增创作指令提示
+- `main.py`：系统 prompt 新增创作能力描述
+- `server.py`：新增 5 个创作接口
+
+---
+
 ## [v0.5.0] - 2026-06-10
 
 ### Added
@@ -248,6 +305,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### 文档
 - `README.md`：项目介绍与使用说明
 
+[v0.5.1]: https://github.com/jinshi678/jinshiagent/releases/tag/v0.5.1
 [v0.5.0]: https://github.com/jinshi678/jinshiagent/releases/tag/v0.5.0
 [v0.4.0]: https://github.com/jinshi678/jinshiagent/releases/tag/v0.4.0
 [v0.3.0]: https://github.com/jinshi678/jinshiagent/releases/tag/v0.3.0
