@@ -7,13 +7,14 @@
 
 功能:
     - 加载 .env / config.yaml 配置
-    - 注册演示工具（计算器、天气查询、搜索）
+    - 注册内置工具（计算器、天气查询、搜索）— 真实 API
     - 启动交互式对话循环
     - 展示完整的 ReAct（思考→行动→观察）推理过程
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import sys
@@ -24,62 +25,51 @@ from jinshiagent.config.loader import load_config
 from jinshiagent.core import Agent, ToolRegistry
 from jinshiagent.core.agent import AgentError
 from jinshiagent.llm import LLMClient, LLMConfig
+from jinshiagent.tools import get_weather, search_web, calculator
 from jinshiagent.utils.exceptions import LLMError
 from jinshiagent.utils.logging import setup_logging
 
 
 # ————————————————————————————————————————————————————————————————
-# 演示工具定义
+# 内置工具注册 — 真实 API 版本
 # ————————————————————————————————————————————————————————————————
 
 
-def register_demo_tools(registry: ToolRegistry) -> None:
-    """注册一组演示工具，用于展示 ReAct 循环。"""
+def register_builtin_tools(registry: ToolRegistry) -> None:
+    """注册内置工具集 — 使用真实 API。
+
+    工具列表:
+        - calculator: 安全数学表达式计算（本地执行，无需网络）
+        - get_weather: 天气查询（wttr.in，无需 API Key）
+        - search_web: 网络搜索（DuckDuckGo，无需 API Key）
+    """
 
     @registry.register
-    def calculator(expression: str) -> str:
-        """计算数学表达式。支持 +, -, *, /, 括号。
-        
+    def _calculator(expression: str) -> str:
+        """计算数学表达式。支持 +, -, *, /, %, **, 括号和函数（abs/round/min/max）。
+
         Args:
             expression: 数学表达式字符串，例如 "12 * 8 + 3"
         """
-        try:
-            result = eval(expression, {"__builtins__": {}}, {})  # noqa: S307
-            return str(result)
-        except Exception as e:
-            return f"计算失败: {e}"
+        return calculator(expression)
 
     @registry.register
-    def get_weather(city: str) -> str:
-        """查询指定城市的当前天气。
-        
+    def _get_weather(city: str) -> str:
+        """查询指定城市的当前天气。使用 wttr.in 免费 API，无需 API Key。
+
         Args:
-            city: 城市名称，例如 "北京"、"上海"
+            city: 城市名称，例如 "北京"、"Shanghai"、"New York"
         """
-        # Mock 数据 — 实际项目中应调用天气 API
-        mock_data: dict[str, str] = {
-            "北京": "晴，28°C，空气质量良好",
-            "上海": "多云，30°C，湿度 75%",
-            "武汉": "小雨，25°C，建议带伞",
-            "深圳": "晴，32°C，紫外线较强",
-            "广州": "阴，29°C，微风",
-        }
-        return mock_data.get(city, f"暂无 {city} 的天气数据（Mock 模式）")
+        return get_weather(city)
 
     @registry.register
-    def search_web(query: str) -> str:
-        """在互联网上搜索指定关键词的信息。
-        
+    def _search_web(query: str) -> str:
+        """在互联网上搜索指定关键词的信息。使用 DuckDuckGo，无需 API Key。
+
         Args:
             query: 搜索关键词
         """
-        # Mock 数据 — 实际项目中应调用搜索 API
-        return (
-            f"[Mock 搜索结果] 关于「{query}」的搜索结果：\n"
-            f"  1. JinshiAgent 文档 — jinshiagent.readthedocs.io\n"
-            f"  2. ReAct 论文 — arxiv.org/abs/2210.03629\n"
-            f"  3. OpenAI Function Calling 指南 — platform.openai.com/docs"
-        )
+        return search_web(query)
 
 
 # ————————————————————————————————————————————————————————————————
@@ -113,8 +103,7 @@ class MockLLMClient:
         # 第一次调用：根据用户输入决定调用哪个工具
         if self._call_count == 1:
             if any(w in user_msg for w in ["天气", "气温", "下雨", "温度"]):
-                # 提取城市名（简单启发式）
-                for city in ["北京", "上海", "武汉", "深圳", "广州"]:
+                for city in ["北京", "上海", "武汉", "深圳", "广州", "Tokyo", "New York"]:
                     if city in user_msg:
                         return {
                             "role": "assistant",
@@ -123,7 +112,7 @@ class MockLLMClient:
                                 {
                                     "id": "call_001",
                                     "function": {
-                                        "name": "get_weather",
+                                        "name": "_get_weather",
                                         "arguments": f'{{"city": "{city}"}}',
                                     },
                                 }
@@ -136,7 +125,7 @@ class MockLLMClient:
                         {
                             "id": "call_002",
                             "function": {
-                                "name": "get_weather",
+                                "name": "_get_weather",
                                 "arguments": '{"city": "北京"}',
                             },
                         }
@@ -153,7 +142,7 @@ class MockLLMClient:
                         {
                             "id": "call_003",
                             "function": {
-                                "name": "calculator",
+                                "name": "_calculator",
                                 "arguments": f'{{"expression": "{expression.strip()}"}}',
                             },
                         }
@@ -167,8 +156,8 @@ class MockLLMClient:
                     {
                         "id": "call_004",
                         "function": {
-                            "name": "search_web",
-                            "arguments": f'{{"query": "{user_msg[:20]}"}}',
+                            "name": "_search_web",
+                            "arguments": f'{{"query": "{user_msg[:30]}"}}',
                         },
                     }
                 ],
@@ -198,6 +187,7 @@ def main() -> None:
 
     # 解析命令行参数（简易版）
     verbose: bool = "--verbose" in sys.argv or "-v" in sys.argv
+    use_async: bool = "--async" in sys.argv
 
     # 初始化日志
     setup_logging(level="DEBUG" if verbose else "INFO")
@@ -205,8 +195,8 @@ def main() -> None:
 
     print("=" * 60)
     print("  JinshiAgent v0.1.0 — AI Agent 工具框架")
-    print(" 输入 'quit' / 'exit' / 'q' 退出")
-    print(" 输入 'reset' 清空对话历史")
+    print("  输入 'quit' / 'exit' / 'q' 退出")
+    print("  输入 'reset' 清空对话历史")
     print("=" * 60)
 
     # 准备 LLM 客户端
@@ -215,7 +205,8 @@ def main() -> None:
 
     if use_mock:
         print("\n[提示] 未检测到有效 OPENAI_API_KEY，使用 Mock 模式演示 ReAct 流程。")
-        print("[提示] 请在 .env 文件中配置真实的 API Key 以使用完整功能。\n")
+        print("[提示] 请在 .env 文件中配置真实的 API Key 以使用完整功能。")
+        print("[提示] 工具（天气/搜索/计算器）已使用真实 API，Mock 仅影响 LLM 部分。\n")
         llm_client: Any = MockLLMClient()
     else:
         try:
@@ -227,11 +218,12 @@ def main() -> None:
 
     # 创建工具注册中心和 Agent
     registry: ToolRegistry = ToolRegistry()
-    register_demo_tools(registry)
+    register_builtin_tools(registry)
 
     system_prompt: str = (
         "你是一个有用的 AI 助手。可以使用工具来回答用户问题。"
         "当需要计算、查天气或搜索信息时，请主动调用相应工具。"
+        "回答时请用中文，简洁明了。"
     )
     agent: Agent = Agent(
         name="jinshiagent-cli",
