@@ -5,6 +5,7 @@ import pytest
 from jinshiagent.core.agent import Agent
 from jinshiagent.core.message import Message, MessageRole
 from jinshiagent.core.tool_registry import ToolRegistry
+from jinshiagent.utils.exceptions import AgentError
 
 
 class TestAgent:
@@ -33,9 +34,9 @@ class TestAgent:
         agent.reset()
         assert len(agent.history) == 0
 
-    def test_run_not_implemented(self) -> None:
+    def test_run_without_llm_client(self) -> None:
         agent = Agent(name="test")
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(AgentError, match="llm_client"):
             agent.run("test")
 
     def test_register_tool(self) -> None:
