@@ -32,6 +32,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# ChromaDB 向量数据库后端（可选，不可用时自动降级为内置纯 Python 后端）
+# 注意：Windows 环境下 ChromaDB 可能因 onnxruntime/hnswlib 兼容性问题导致 segfault
+# 此时 LongTermMemory 会自动降级为内置向量存储，无需此依赖
 memory = [
     "chromadb>=0.5.0",
 ]
