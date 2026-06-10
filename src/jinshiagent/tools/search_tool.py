@@ -6,6 +6,12 @@
     - 免费，无需注册 API Key
     - 支持中英文搜索
     - 返回结构化的搜索结果（标题、链接、摘要）
+    - 内置重试和超时机制
+
+增强功能:
+    - 自动重试：网络错误时自动重试最多 2 次
+    - 超时控制：默认 15 秒超时
+    - 参数校验：query 必须为非空字符串，max_results 范围 1-10
 
 使用示例::
 
@@ -13,8 +19,6 @@
 
     results = search_web("AI Agent 框架")
     print(results)
-    # 1. [LangChain](https://python.langchain.com) — Building applications with LLMs...
-    # 2. ...
 """
 
 from __future__ import annotations
@@ -27,15 +31,13 @@ import urllib.error
 from html.parser import HTMLParser
 from typing import Any
 
+from jinshiagent.tools.tool_enhancements import retry, timeout as timeout_decorator, validate
+
 logger = logging.getLogger("jinshiagent.tools.search")
 
 
 class _DuckDuckGoResultParser(HTMLParser):
-    """简易 DuckDuckGo HTML 搜索结果解析器。
-
-    DuckDuckGo HTML 版 (html.duckduckgo.com) 返回的页面中，
-    搜索结果位于 class="result" 的 div 中。我们提取其中的标题、链接和摘要。
-    """
+    """简易 DuckDuckGo HTML 搜索结果解析器。"""
 
     def __init__(self) -> None:
         super().__init__()
@@ -67,7 +69,6 @@ class _DuckDuckGoResultParser(HTMLParser):
             self._in_title = False
         if self._in_snippet:
             self._in_snippet = False
-        # 结果块结束（简化判断）
 
     def handle_data(self, data: str) -> None:
         text = data.strip()
@@ -80,6 +81,23 @@ class _DuckDuckGoResultParser(HTMLParser):
             self._current["snippet"] = self._current.get("snippet", "") + " " + text
 
 
+def _validate_query(query: Any) -> str:
+    """校验搜索查询参数。"""
+    if not isinstance(query, str) or not query.strip():
+        raise ValueError(f"搜索关键词必须是非空字符串，收到: {query!r}")
+    return query.strip()
+
+
+def _validate_max_results(max_results: int) -> int:
+    """校验并规范化 max_results 参数。"""
+    if not isinstance(max_results, int):
+        raise ValueError(f"max_results 必须是整数，收到: {max_results!r}")
+    return max(1, min(10, max_results))
+
+
+@retry(max_retries=2, delay=1.0, backoff=2.0, exceptions=(urllib.error.URLError, ConnectionError, TimeoutError))
+@timeout_decorator(seconds=20)
+@validate(query=str, max_results=int)
 def search_web(
     query: str,
     *,
@@ -89,7 +107,7 @@ def search_web(
 ) -> str:
     """在互联网上搜索指定关键词的信息（使用 DuckDuckGo）。
 
-    无需 API Key，支持中英文搜索。
+    无需 API Key，支持中英文搜索。内置重试和超时机制。
 
     Args:
         query: 搜索关键词
@@ -104,17 +122,18 @@ def search_web(
         >>> search_web("Python Agent 框架")
         '1. [LangChain](https://...) — Building applications with LLMs...\\n2. ...'
     """
+    query = _validate_query(query)
+    max_results = _validate_max_results(max_results)
     logger.debug("搜索: query=%s, max_results=%d", query, max_results)
-    max_results = max(1, min(10, max_results))
 
     try:
         raw_results = _duckduckgo_search(query, max_results, lang, timeout)
     except urllib.error.URLError as e:
         logger.warning("搜索 API 网络错误: %s", e)
-        return f"⚠️ 搜索失败（网络错误）: {query} — {e.reason}"
+        return f"搜索失败（网络错误）: {query} — {e.reason}"
     except Exception as e:
         logger.warning("搜索异常: %s", e)
-        return f"⚠️ 搜索失败: {query} — {e}"
+        return f"搜索失败: {query} — {e}"
 
     if not raw_results:
         return f"未找到关于「{query}」的相关结果。"
@@ -173,7 +192,7 @@ def _duckduckgo_search(
     if not results:
         results = _regex_parse_results(html)
 
-    # 去重（同一 URL 可能出现多次）
+    # 去重
     seen: set[str] = set()
     unique: list[dict[str, str]] = []
     for r in results:
@@ -189,8 +208,6 @@ def _regex_parse_results(html: str) -> list[dict[str, str]]:
     """正则表达式解析搜索结果（备选方案）。"""
     results: list[dict[str, str]] = []
 
-    # 匹配 DuckDuckGo HTML 结果块
-    # 结果链接模式
     link_pattern = re.compile(
         r'<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>(.*?)</a>',
         re.DOTALL,
@@ -200,16 +217,14 @@ def _regex_parse_results(html: str) -> list[dict[str, str]]:
         re.DOTALL,
     )
 
-    # 按结果块分割
     blocks = re.split(r'<div[^>]+class="result[^"]*"', html)
 
-    for block in blocks[1:]:  # 跳过第一个（非结果内容）
+    for block in blocks[1:]:
         result: dict[str, str] = {}
 
         link_match = link_pattern.search(block)
         if link_match:
             result["url"] = link_match.group(1)
-            # 清理 HTML 标签
             result["title"] = re.sub(r"<[^>]+>", "", link_match.group(2)).strip()
 
         snippet_match = snippet_pattern.search(block)
