@@ -1,6 +1,8 @@
 # JinshiAgent 🤖
 
 > AI Agent 工具框架 — 模块化、可组合、易扩展
+>
+> **当前版本**：[v0.3.0](https://github.com/jinshi678/jinshiagent/releases/tag/v0.3.0) · [更新日志](CHANGELOG.md)
 
 JinshiAgent 是一个面向 AI Agent 开发者的工具框架，提供智能体编排、工具调用、记忆管理和多轮对话等核心能力的封装与实现。目标是降低 Agent 应用的开发门槛，提供开箱即用的模块化组件。
 
@@ -377,3 +379,4 @@ MIT License
 - **仓库**：https://github.com/jinshi678/jinshiagent
 - **问题反馈**：https://github.com/jinshi678/jinshiagent/issues
 - **快速入门**：[docs/quickstart.md](docs/quickstart.md)
+- **更新日志**：[CHANGELOG.md](CHANGELOG.md)
