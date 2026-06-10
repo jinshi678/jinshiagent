@@ -1,0 +1,59 @@
+# JinshiAgent Docker Compose 配置
+# 使用方式: docker compose up -d
+
+version: "3.8"
+
+services:
+  # ── FastAPI API 服务 ─────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jinshiagent-api
+    restart: unless-stopped
+    ports:
+      - "${JINSHI_PORT:-8000}:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_API_BASE=${OPENAI_API_BASE:-https://api.openai.com/v1}
+      - JINSHI_MODEL=${JINSHI_MODEL:-gpt-4o}
+      - JINSHI_API_KEY=${JINSHI_API_KEY:-}
+      - JINSHI_HOST=0.0.0.0
+      - JINSHI_PORT=8000
+    volumes:
+      - jinshiagent-data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - jinshiagent-net
+
+  # ── Streamlit Web UI ─────────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jinshiagent-web
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    environment:
+      - JINSHI_API_KEY=${JINSHI_API_KEY:-}
+    entrypoint: ["streamlit", "run", "web/app.py"]
+    command: ["--server.port=8501", "--server.address=0.0.0.0", "--browser.gatherUsageStats=false"]
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - jinshiagent-net
+
+volumes:
+  jinshiagent-data:
+    driver: local
+
+networks:
+  jinshiagent-net:
+    driver: bridge

@@ -1,0 +1,15 @@
+.docker
+.env
+.git
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.mypy_cache
+.ruff_cache
+*.egg-info
+dist
+build
+chroma_data
+data
+.venv

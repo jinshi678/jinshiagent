@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.5.0] - 2026-06-10
+
+### Added
+
+#### FastAPI HTTP API 服务 (`server.py`)
+- 完整的 RESTful API 接口，为 Agent 提供 HTTP 访问能力
+- 对话接口：`POST /chat`（创建/继续会话）、`GET /chat/sessions`（列表）、`GET /chat/sessions/{id}/history`（历史）、`DELETE /chat/sessions/{id}`（删除）、`POST /chat/sessions/{id}/reset`（重置）
+- 工具接口：`GET /tools`（列表）、`POST /tools/call`（调用）
+- 记忆接口：`GET /memory/count`（统计）、`POST /memory/add`（添加）、`POST /memory/search`（搜索）、`GET /memory/all`（浏览）、`DELETE /memory/{id}`（删除）
+- 多 Agent 协作接口：`POST /multi-agent/run`（执行）、`GET /multi-agent/modes`（模式列表）
+- API 密钥认证：通过 `JINSHI_API_KEY` 环境变量启用，支持 Bearer Token 方式
+- 自动 Swagger 文档：启动后访问 `/docs`
+- 健康检查：`GET /health`（版本、LLM 状态、记忆状态、工具数、会话数）
+- CORS 中间件：支持跨域访问
+- 会话池管理：自动创建/复用 Agent 实例
+
+#### Streamlit Web UI (`web/app.py`)
+- 聊天界面：多轮对话、消息气泡展示、工具调用结果高亮
+- 会话管理：新建会话、重置对话、切换会话
+- 设置面板：API 地址、API 密钥、系统提示词配置
+- 记忆管理页面：搜索、添加、浏览、删除长期记忆
+- 多 Agent 协作页面：Orchestrator / Pipeline / RoundRobin 三种模式
+- 服务健康检查状态显示
+- 已注册工具列表展示
+
+#### Docker 部署模板
+- `Dockerfile`：多阶段构建（builder → runtime），非 root 用户运行
+  - 基于 python:3.12-slim，镜像精简
+  - 内置健康检查（`curl /health`）
+  - 数据持久化到 `/app/data`
+- `docker-compose.yml`：一键部署 API + Web UI
+  - API 服务（端口 8000）+ Web UI（端口 8501）
+  - 健康检查依赖、数据卷、网络隔离
+  - 环境变量透传（OPENAI_API_KEY 等）
+- `.dockerignore`：构建排除规则
+- `.env.example`：环境变量配置模板
+
+#### 文档
+- `docs/deployment.md`：本地/服务器/Docker 部署完整指南
+
+### Changed
+- 版本号 `0.4.0` → `0.5.0`
+- `pyproject.toml`：新增 `fastapi` / `uvicorn` 核心依赖，新增 `[server]` / `[web]` 可选依赖组，新增 `jinshiagent-server` 入口点
+- `__init__.py`：版本号更新至 0.5.0
+
+---
+
 ## [v0.4.0] - 2026-06-10
 
 ### Added
@@ -201,6 +248,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### 文档
 - `README.md`：项目介绍与使用说明
 
+[v0.5.0]: https://github.com/jinshi678/jinshiagent/releases/tag/v0.5.0
 [v0.4.0]: https://github.com/jinshi678/jinshiagent/releases/tag/v0.4.0
 [v0.3.0]: https://github.com/jinshi678/jinshiagent/releases/tag/v0.3.0
 [v0.2.0]: https://github.com/jinshi678/jinshiagent/compare/v0.1.0...v0.2.0

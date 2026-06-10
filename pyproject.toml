@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "jinshiagent"
-version = "0.4.0"
+version = "0.5.0"
 description = "AI Agent 工具框架 — 模块化、可组合、易扩展"
 readme = "README.md"
 license = "MIT"
@@ -29,6 +29,8 @@ dependencies = [
     "pyyaml>=6.0",
     "python-dotenv>=1.0.0",
     "rich>=13.7.0",
+    "fastapi>=0.111.0",
+    "uvicorn>=0.30.0",
 ]
 
 [project.optional-dependencies]
@@ -38,6 +40,13 @@ dependencies = [
 memory = [
     "chromadb>=0.5.0",
 ]
+server = [
+    "uvicorn>=0.30.0",
+]
+web = [
+    "streamlit>=1.35.0",
+    "httpx>=0.27.0",
+]
 dev = [
     "pytest>=8.2.0",
     "pytest-asyncio>=0.23.0",
@@ -45,11 +54,12 @@ dev = [
     "mypy>=1.10.0",
 ]
 all = [
-    "jinshiagent[memory,dev]",
+    "jinshiagent[memory,server,web,dev]",
 ]
 
 [project.scripts]
 jinshiagent = "jinshiagent.main:main"
+jinshiagent-server = "jinshiagent.server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/jinshiagent"]
