@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "jinshiagent"
-version = "0.3.0"
+version = "0.4.0"
 description = "AI Agent 工具框架 — 模块化、可组合、易扩展"
 readme = "README.md"
 license = "MIT"

@@ -5,6 +5,65 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.4.0] - 2026-06-10
+
+### Added
+
+#### MCP 协议支持 (`mcp/` 模块)
+- `MCPClient`: MCP 协议客户端，管理与工具服务器的完整交互生命周期
+  - 自动 MCP 握手（initialize / initialized）
+  - 工具发现（tools/list）
+  - 工具调用（tools/call），支持错误处理
+  - 连接管理（connect / disconnect / reconnect）
+- `MCPServerConfig`: Pydantic 服务器连接配置模型
+  - 支持 stdio（子进程）和 HTTP SSE 两种传输方式
+- `MCPToolInfo`: MCP 工具描述模型（name / description / inputSchema）
+- 传输层抽象 (`mcp/transport.py`)
+  - `MCPTransport`: 传输层基类
+  - `StdioTransport`: 基于 asyncio 子进程的 stdio 传输（最常见方式）
+  - `HTTPTransport`: 基于 HTTP POST 的传输（远程服务器场景）
+  - `TransportState`: 连接状态枚举（DISCONNECTED / CONNECTING / CONNECTED / ERROR）
+  - 完整 JSON-RPC 2.0 协议实现（请求/响应/通知/错误码）
+- `MCPToolAdapter` (`mcp/adapter.py`): MCP 工具到 ToolRegistry 的适配器
+  - 将 MCP 工具注册为 ToolRegistry 可识别的 ToolDefinition
+  - 支持同步适配（内部 asyncio.run()）和异步适配（async 函数）
+  - 工具名前缀（避免多服务器工具名冲突）
+  - MCP inputSchema 到 OpenAI Function Calling 格式转换
+  - register_all / unregister_all 批量管理
+- `mock_server.py`: 模拟 MCP 服务器（echo / calculate / translate 三个测试工具）
+  - 完整 JSON-RPC 2.0 服务端实现
+  - 通过 stdio 传输运行
+  - 用于测试和演示
+
+#### 测试
+- `tests/test_mcp.py`: 8 个 MCP 协议单元测试（全通过）
+  - MCPServerConfig 数据模型
+  - MCPToolInfo 工具描述
+  - 传输层创建（stdio / http / 无效类型）
+  - MCP Schema 到 OpenAI 格式转换
+  - 模拟服务器端到端握手（initialize + tools/list + tools/call）
+  - MCPToolAdapter 同步适配
+  - MCPToolAdapter 异步适配
+  - 传输层状态管理
+
+#### 示例
+- `examples/mcp_demo.py`: 4 个 MCP 协议演示
+  - 工具发现
+  - 工具适配到 ToolRegistry
+  - MCP + Agent 集成
+  - 多 MCP 服务器聚合
+- `examples/e2e_demo.py`: 端到端完整流程演示
+  - 工具调用（内置 + MCP 远程）
+  - 长期记忆（多轮对话 Agent 记住用户信息）
+  - 多 Agent 协作（Orchestrator / Pipeline）
+  - MCP 远程工具集成
+
+### Changed
+- 版本号 `0.3.0` → `0.4.0`
+- README.md: 添加 MCP 协议使用说明和示例六
+
+---
+
 ## [v0.3.0] - 2026-06-10
 
 ### Added
@@ -142,6 +201,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### 文档
 - `README.md`：项目介绍与使用说明
 
+[v0.4.0]: https://github.com/jinshi678/jinshiagent/releases/tag/v0.4.0
 [v0.3.0]: https://github.com/jinshi678/jinshiagent/releases/tag/v0.3.0
 [v0.2.0]: https://github.com/jinshi678/jinshiagent/compare/v0.1.0...v0.2.0
 [v0.1.0]: https://github.com/jinshi678/jinshiagent/releases/tag/v0.1.0
