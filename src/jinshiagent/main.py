@@ -28,6 +28,7 @@ from jinshiagent.core.agent import AgentError
 from jinshiagent.llm import LLMClient, LLMConfig
 from jinshiagent.tools import get_weather, search_web, calculator
 from jinshiagent.utils.exceptions import LLMError
+from jinshiagent import __version__
 from jinshiagent.utils.logging import setup_logging
 
 
@@ -387,7 +388,7 @@ async def async_main() -> None:
     logger: logging.Logger = logging.getLogger("jinshiagent")
 
     print("=" * 60)
-    print("  JinshiAgent v0.5.0 — AI Agent 工具框架（异步模式）")
+    print(f"  JinshiAgent v{__version__} — AI Agent 工具框架（异步模式）")
     print("  输入 'quit' / 'exit' / 'q' 退出")
     print("  输入 'reset' 清空对话历史")
     print("  输入 '/创作 douyin AI绘画' 一键生成创作素材")
@@ -491,7 +492,7 @@ def main() -> None:
     logger: logging.Logger = logging.getLogger("jinshiagent")
 
     print("=" * 60)
-    print("  JinshiAgent v0.5.0 — AI Agent 工具框架")
+    print(f"  JinshiAgent v{__version__} — AI Agent 工具框架")
     print("  输入 'quit' / 'exit' / 'q' 退出")
     print("  输入 'reset' 清空对话历史")
     print("  输入 '/创作 douyin AI绘画' 一键生成创作素材")

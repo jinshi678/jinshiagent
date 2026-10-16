@@ -9,6 +9,21 @@ from jinshiagent.tools.weather_tool import get_weather
 from jinshiagent.tools.search_tool import search_web
 
 
+def _has_network() -> bool:
+    """检测是否有网络连接。
+
+    注意：本函数必须定义在使用它的 skipif 装饰器之前。
+    装饰器在模块导入（类体求值）时即执行，若定义在文件末尾会触发 NameError。
+    """
+    import urllib.request
+
+    try:
+        urllib.request.urlopen("https://www.google.com", timeout=3)
+        return True
+    except Exception:
+        return False
+
+
 # ——— 计算器测试 ———
 
 
@@ -117,16 +132,3 @@ class TestSearch:
             search_web("test", max_results=0)  # 会被裁剪为 1
         except Exception:
             pass  # 网络错误可以接受
-
-
-# ——— 工具辅助函数 ———
-
-
-def _has_network() -> bool:
-    """检测是否有网络连接。"""
-    import urllib.request
-    try:
-        urllib.request.urlopen("https://www.google.com", timeout=3)
-        return True
-    except Exception:
-        return False
